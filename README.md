@@ -1,8 +1,11 @@
 # commit_tool
 
-Proyecto de migración de `gitmoji-cli` a una CLI nativa en Go, con modos
-`emoji`, `standard` e `hybrid`.
+Migration of `gitmoji-cli` to a native Go CLI with `emoji`, `standard`, and
+`hybrid` commit modes.
 
-La versión mínima de Go está declarada en [go.mod](go.mod). Git es la dependencia
-externa del producto. Los comandos de desarrollo se documentan en AGENTS y se
-ejecutan cuando existan fuentes Go.
+The minimum Go version is declared in [go.mod](go.mod).
+
+Prepare a message: `go run ./cmd/gitmoji commit --type feat --title "add search"`.
+
+Based on gitmoji-cli and the gitmoji catalog by Carlos Cuesta, under the [MIT license](LICENSE).
+Attribution and resource provenance are recorded in the compatibility contract.
