@@ -2,5 +2,4 @@
 /coverage/
 *.test
 *.out
-docs/agent-logs/*
-!docs/agent-logs/.gitkeep
+docs/
