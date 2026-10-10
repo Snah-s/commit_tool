@@ -1,5 +1,6 @@
-/bin/
-/coverage/
+bin/
+dist/
+coverage/
 *.test
 *.out
 docs/

@@ -18,6 +18,9 @@ type Options struct {
 	Help, Version, Accessible, Prototype      bool
 	FormatSet, TypeSet, EmojiSet              bool
 	TitleSet, ScopeSet, BodySet               bool
+	ConfigSet                                 []string
+	ImportFile                                string
+	ImportSet, Show                           bool
 }
 
 var actions = map[string]string{
@@ -51,6 +54,9 @@ func Parse(args []string) (Options, error) {
 	f.StringVar(&o.Draft.Body, "message", "", "")
 	f.StringVar(&o.Draft.Scope, "scope", "", "")
 	f.StringVar(&o.HookFile, "hook", "", "")
+	f.StringVar(&o.ImportFile, "import", "", "")
+	f.BoolVar(&o.Show, "show", false, "")
+	f.Func("set", "", func(value string) error { o.ConfigSet = append(o.ConfigSet, value); return nil })
 	selected := make(map[string]*bool)
 	for alias, command := range actions {
 		if selected[command] == nil {
@@ -106,6 +112,8 @@ func Parse(args []string) (Options, error) {
 			o.ScopeSet = true
 		case "hook":
 			hookSet = true
+		case "import":
+			o.ImportSet = true
 		}
 	})
 	explicit := ""
@@ -172,8 +180,14 @@ func Parse(args []string) (Options, error) {
 			return o, fmt.Errorf("unexpected arguments for %s: %q", o.Command, positional)
 		}
 	}
-	if o.Command != "commit" && o.Command != "hook" && (o.FormatSet || o.TypeSet || o.EmojiSet || o.TitleSet || o.ScopeSet || o.BodySet || o.Accessible) {
+	if o.Command != "commit" && o.Command != "hook" && (o.FormatSet || o.TypeSet || o.EmojiSet || o.TitleSet || o.ScopeSet || o.BodySet || o.Accessible && o.Command != "config") {
 		return o, fmt.Errorf("message flags are not supported with %s", o.Command)
+	}
+	if o.Command != "config" && (o.ImportSet || o.Show || len(o.ConfigSet) > 0) {
+		return o, errors.New("--import, --show, and --set are only supported with config")
+	}
+	if o.ImportSet && (o.ImportFile == "" || len(o.ConfigSet) > 0 || o.Show) || o.Show && len(o.ConfigSet) > 0 {
+		return o, errors.New("config: choose --show, --set KEY=JSON, or --import FILE separately")
 	}
 	return o, nil
 }
@@ -201,15 +215,15 @@ func (o Options) Defaults(initial commit.Draft) commit.Draft {
 
 const Help = `Usage: gitmoji <command> [flags]
 
-  commit (-c, --commit)        Prepare a message; Git execution pending phase 4
-  prototype                   Review the phase 1 form
-  config (-g, --config)        Configuration (phase 3)
-  list (-l, --list)            Catalog (phase 3)
-  search (-s, --search)        Multiple queries (phase 3)
-  update (-u, --update)        Update the catalog (phase 3)
-  init (-i, --init)            Install the hook (phase 4)
-  remove (-r, --remove)        Remove the owned hook (phase 4)
-  hook, --hook FILE            Prepare from file [source [object]] without writing it
+  commit (-c, --commit)        Create a Git commit using the current index
+  prototype                   Prepare a message without changing Git or files
+  config (-g, --config)        Edit global preferences; without TTY, show preferences
+  list (-l, --list)            List the offline catalog
+  search (-s, --search)        Search multiple queries independently
+  update (-u, --update)        Update the catalog; retain the cache on failure
+  init (-i, --init)            Install/update the recognized managed hook
+  remove (-r, --remove)        Remove only a recognized managed hook
+  hook, --hook FILE            Review and save file [source [object]] with TTY
 
   --format emoji|standard|hybrid   Default: standard; overrides preferences
   --type feat|fix|docs|refactor|test|chore
@@ -217,12 +231,16 @@ const Help = `Usage: gitmoji <command> [flags]
   --title DESCRIPTION            Description, without title prefixes
   --scope SCOPE                  Optional, lowercase
   --message BODY                 Literal paragraphs/trailers
-  --accessible                   Text prompts; also ACCESSIBLE=1
+  --accessible                   Compatibility alias; prompts are inline by default
+  config --show                  Show global/effective preferences and their source
+  config --set KEY=JSON           Save a global preference; repeat for multiple values
+  config --import FILE            Import a legacy profile when no native profile exists
   -h, --help                     Help without side effects
   -v, --version                  Native version without side effects
 
-No TTY: commit requires --title and a complete selection; it returns the message.
+No TTY: commit requires --title and a complete selection; prototype returns the message.
 Flags can be interleaved; -- ends flags and allows literal queries.
 Values starting with a dash: --title=-value. Repeated flags: last value wins.
-This phase does not create commits, change staging, or install hooks.
+Commit honors autoAdd (false by default); an active managed hook blocks this client.
+Hooks preserve messages on cancel, without TTY, during rebase, and for commit/merge sources.
 `

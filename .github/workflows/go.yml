@@ -1,0 +1,71 @@
+name: Go
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.os }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, os: linux, arch: amd64}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install signing and terminal test tools on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gnupg pinentry-tty tmux
+      - name: Verify native platform and formatting
+        env:
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(go env GOOS)" = "$TARGET_OS"
+          test "$(go env GOARCH)" = "$TARGET_ARCH"
+          test -z "$(gofmt -l cmd internal)"
+          go mod verify
+          go vet ./...
+      - name: Test behavior
+        run: go test ./...
+      - name: Test races on Unix
+        if: runner.os != 'Windows'
+        run: go test -race ./...
+      - name: Build candidate archive
+        run: sh scripts/package.sh dev
+      - name: Verify packaged executable
+        run: |
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd dist && sha256sum -c *.sha256)
+          else
+            (cd dist && shasum -a 256 -c *.sha256)
+          fi
+          mkdir unpacked
+          tar -xzf dist/*.tar.gz -C unpacked
+          artifact=$(find "$PWD/unpacked" -type f \( -name gitmoji -o -name gitmoji.exe \))
+          if [ "$RUNNER_OS" = Windows ]; then artifact=$(cygpath -w "$artifact"); fi
+          GITMOJI_ARTIFACT="$artifact" go test ./cmd/gitmoji -run '^TestReleaseArtifact$' -count=1 -v
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gitmoji-${{ matrix.os }}-${{ matrix.arch }}-candidate
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14

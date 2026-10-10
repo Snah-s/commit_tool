@@ -59,6 +59,15 @@ func TestArguments(t *testing.T) {
 			t.Fatalf("accepted %v", args)
 		}
 	}
+	o, err = Parse([]string{"config", "--set", `commitFormat="hybrid"`, "--set", `scopePrompt=["api"]`, "--accessible"})
+	if err != nil || len(o.ConfigSet) != 2 || !o.Accessible {
+		t.Fatalf("config args: %+v %v", o, err)
+	}
+	for _, args := range [][]string{{"commit", "--show"}, {"list", "--import=profile"}, {"config", "--import="}, {"config", "--show", "--set=autoAdd=true"}, {"config", "--set=autoAdd=true", "--import=profile"}} {
+		if _, err := Parse(args); err == nil {
+			t.Fatalf("accepted config action conflict %v", args)
+		}
+	}
 }
 
 func TestExplicitDefaults(t *testing.T) {
