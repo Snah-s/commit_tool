@@ -16,6 +16,8 @@ import (
 
 // A PTY transcript cannot detect artifacts left on screen by incremental redraws.
 func TestEmojiSelectorScreen(t *testing.T) {
+	// Older tmux captures emoji filler cells as extra spaces.
+	normalize := func(text string) string { return strings.Join(strings.Fields(text), " ") }
 	for _, mode := range []string{"wcwidth", "grapheme", "legacy-emoji"} {
 		t.Run(mode, func(t *testing.T) {
 			tmux, err := exec.LookPath("tmux")
@@ -54,7 +56,7 @@ func TestEmojiSelectorScreen(t *testing.T) {
 				deadline := time.Now().Add(3 * time.Second)
 				for {
 					screen := run("capture-pane", "-p", "-t", "selector")
-					if strings.Contains(screen, selected) {
+					if strings.Contains(normalize(screen), normalize(selected)) {
 						return screen
 					}
 					if time.Now().After(deadline) {
@@ -67,10 +69,15 @@ func TestEmojiSelectorScreen(t *testing.T) {
 			run("send-keys", "-t", "selector", "Down", "Enter")
 			first := c.Entries[0]
 			waitScreen("> " + first.Emoji + " " + first.Code + " " + first.Description)
-			if mode != "wcwidth" {
-				run("set-option", "-s", "variation-selector-always-wide", "on")
-			} else {
-				run("set-option", "-s", "variation-selector-always-wide", "off")
+			if run("show-options", "-s", "-qv", "variation-selector-always-wide") != "" {
+				width := "on"
+				if mode == "wcwidth" {
+					width = "off"
+				}
+				run("set-option", "-s", "variation-selector-always-wide", width)
+			} else if mode == "wcwidth" {
+				// Before tmux 3.6, VS16 is always wide and cannot emulate wcwidth.
+				t.Skip("tmux lacks variation-selector-always-wide for wcwidth verification")
 			}
 			if mode == "grapheme" {
 				// Emulate Foot's mode 2027 reply; tmux does not advertise this mode.
@@ -78,7 +85,7 @@ func TestEmojiSelectorScreen(t *testing.T) {
 			}
 			labels := make(map[string]bool, len(c.Entries))
 			for _, entry := range c.Entries {
-				labels[entry.Emoji+" "+entry.Code+" "+entry.Description] = true
+				labels[normalize(entry.Emoji+" "+entry.Code+" "+entry.Description)] = true
 			}
 			for i, entry := range c.Entries {
 				if i > 0 {
@@ -97,7 +104,7 @@ func TestEmojiSelectorScreen(t *testing.T) {
 					}
 					label := strings.TrimSpace(strings.TrimPrefix(line, "┃ "))
 					label = strings.TrimSpace(strings.TrimPrefix(label, "> "))
-					if label != "" && label != "Choose a gitmoji" && !labels[label] {
+					if label != "" && label != "Choose a gitmoji" && !labels[normalize(label)] {
 						t.Fatalf("corrupted option while selecting %s: %s", entry.Code, screen)
 					}
 				}
