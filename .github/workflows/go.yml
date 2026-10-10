@@ -63,7 +63,7 @@ jobs:
           artifact=$(find "$PWD/unpacked" -type f \( -name gitmoji -o -name gitmoji.exe \))
           if [ "$RUNNER_OS" = Windows ]; then artifact=$(cygpath -w "$artifact"); fi
           GITMOJI_ARTIFACT="$artifact" go test ./cmd/gitmoji -run '^TestReleaseArtifact$' -count=1 -v
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gitmoji-${{ matrix.os }}-${{ matrix.arch }}-candidate
           path: dist/*
